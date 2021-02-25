@@ -1,12 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
+from validator_collection import validators, checkers
 import subprocess
 import ipaddress
 import socket
 import requests
 import json
-from validator_collection import validators, checkers
+from googlesearch import search
 
 app = FastAPI()
 
@@ -61,7 +62,7 @@ class WhoIsIn(BaseModel):
     class Config:
         schema_extra = {
             "example": {
-                "domain": "www.abc.com"
+                "domain": "fpt.vn"
             }
         }
 
@@ -75,6 +76,62 @@ class WhoIsOut(BaseModel):
     status: List[str]
     creation_date: str
     expiration_date: str
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "total_query": "0",
+                "domain_name": "fpt.vn",
+                "registrar": "Công ty TNHH PA Việt Nam",
+                "registrant_name": "Công ty Cổ phần Viễn thông FPT",
+                "name_server": [
+                    "dns-a.fpt.vn",
+                    "dns-b.fpt.vn"
+                ],
+                "status": [
+                    "clientTransferProhibited"
+                ],
+                "creation_date": "01-10-2000",
+                "expiration_date": "10-06-2036"
+            }
+        }
+
+
+class GoogleDorkIn(BaseModel):
+    query: str
+    lang: str
+    number_of_results: int
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "query": "FPT Information Assurance Club",
+                "lang": "vi",
+                "number_of_results": 10
+            }
+        }
+
+
+class GoogleDorkOut(BaseModel):
+    dorks: List[str]
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "dorks": [
+                    "https://www.facebook.com/fptinformationassurance",
+                    "https://es-la.facebook.com/fptinformationassurance",
+                    "https://uni.fpt.edu.vn/en-US/interesting-with-blockchain-and-the-launch-of-the-information-assurance-club",
+                    "https://vymaps.com/VN/Fpt-Information-Assurance-Club-5569193/",
+                    "https://fia.vercel.app/categories/hacking",
+                    "https://fia.vercel.app/categories/penetration-testing",
+                    "https://123job.vn/cv/goi-y-cach-viet-mau-cv-information-assurance-bang-tieng-anh-15944",
+                    "https://vn.linkedin.com/in/thang-nq-0611",
+                    "https://www.fis.com.vn/",
+                    "http://www.toyo.ac.jp/uploaded/attachment/112036.pdf"
+                ]
+            }
+        }
 
 
 @app.post("/network_scan", response_model=NetworkOut)
@@ -141,7 +198,7 @@ async def port_scan(port_in: PortIn):
     return network_out.dict()
 
 
-@app.post("/whois_scan")
+@app.post("/whois_scan", response_model=WhoIsOut)
 async def whois_scan(who_is_in: WhoIsIn):
     # Declare domain
     domain = who_is_in.domain
@@ -152,7 +209,6 @@ async def whois_scan(who_is_in: WhoIsIn):
     response = requests.get(
         "https://inet.vn/api/whois/" + domain)
     json_data = response.json()
-    print(json.dumps(json_data))
     # Display results
     print("[+] Code: " + json_data['code'])
     print("[+] Total Query: " + str(json_data['totalQuery']))
@@ -177,3 +233,13 @@ async def whois_scan(who_is_in: WhoIsIn):
                           creation_date=json_data['creationDate'],
                           expiration_date=json_data['expirationDate'])
     return who_is_out.dict()
+
+
+@app.post("/google_dork", response_model=GoogleDorkOut)
+async def google_dork(google_dork_in: GoogleDorkIn):
+    # Search Google
+    dorks = search(term=google_dork_in.query,
+                   num_results=google_dork_in.number_of_results, lang=google_dork_in.lang)
+    # Response object
+    google_dork_out = GoogleDorkOut(dorks=dorks)
+    return google_dork_out
