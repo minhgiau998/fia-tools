@@ -8,6 +8,8 @@ import socket
 import requests
 import json
 from googlesearch import search
+from urllib.parse import urlparse
+from spam_lists import SPAMHAUS_DBL
 
 app = FastAPI()
 
@@ -134,6 +136,28 @@ class GoogleDorkOut(BaseModel):
         }
 
 
+class SpamUrlIn(BaseModel):
+    domain: str
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "domain": "fia.vercel.app"
+            }
+        }
+
+
+class SpamUrlOut(BaseModel):
+    is_spam: bool
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "is_spam": True
+            }
+        }
+
+
 @app.post("/network_scan", response_model=NetworkOut)
 async def network_scan(network_in: NetworkIn):
     # Onlines Ip address
@@ -243,3 +267,12 @@ async def google_dork(google_dork_in: GoogleDorkIn):
     # Response object
     google_dork_out = GoogleDorkOut(dorks=dorks)
     return google_dork_out
+
+
+@app.post("/spam_url_checker", response_model=SpamUrlOut)
+async def spam_url_checker(spam_url_in: SpamUrlIn):
+    # Check if url is spam or not
+    is_spam = spam_url_in.domain in SPAMHAUS_DBL
+    # Response object
+    spam_url_out = SpamUrlOut(is_spam=not is_spam)
+    return spam_url_out
