@@ -8,6 +8,9 @@ import socket
 import requests
 import json
 from googlesearch import search
+from urllib.parse import urlparse
+from spam_lists import SPAMHAUS_DBL
+import sql_injection
 
 app = FastAPI()
 
@@ -134,6 +137,50 @@ class GoogleDorkOut(BaseModel):
         }
 
 
+class SpamUrlIn(BaseModel):
+    domain: str
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "domain": "fia.vercel.app"
+            }
+        }
+
+
+class SpamUrlOut(BaseModel):
+    is_spam: bool
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "is_spam": True
+            }
+        }
+
+
+class SqlInjectionIn(BaseModel):
+    url: str
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "url": "http://testphp.vulnweb.com/artists.php?artist=1"
+            }
+        }
+
+
+class SqlInjectionOut(BaseModel):
+    is_vulnerable: bool
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "is_vulnerable": True
+            }
+        }
+
+
 @app.post("/network_scan", response_model=NetworkOut)
 async def network_scan(network_in: NetworkIn):
     # Onlines Ip address
@@ -175,11 +222,11 @@ async def network_scan(network_in: NetworkIn):
 
 @app.post("/port_scan", response_model=PortOut)
 async def port_scan(port_in: PortIn):
-    # Declare ports
-    ports = []
     # Check validation
     if checkers.is_ip_address(port_in.ip_address) == False:
         raise HTTPException(status_code=422, detail="IP address is not valid")
+    # Declare ports
+    ports = []
     # will scan ports between 1 to 1025
     for port in range(1, 1025):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -200,11 +247,11 @@ async def port_scan(port_in: PortIn):
 
 @app.post("/whois_scan", response_model=WhoIsOut)
 async def whois_scan(who_is_in: WhoIsIn):
-    # Declare domain
-    domain = who_is_in.domain
     # Check url
     if checkers.is_domain(domain) == False:
         raise HTTPException(status_code=422, detail="Domain is not valid")
+    # Declare domain
+    domain = who_is_in.domain
     # Send and receive results
     response = requests.get(
         "https://inet.vn/api/whois/" + domain)
@@ -243,3 +290,27 @@ async def google_dork(google_dork_in: GoogleDorkIn):
     # Response object
     google_dork_out = GoogleDorkOut(dorks=dorks)
     return google_dork_out
+
+
+@app.post("/spam_url_checker", response_model=SpamUrlOut)
+async def spam_url_checker(spam_url_in: SpamUrlIn):
+    # Check validation
+    if checkers.is_domain(spam_url_in.domain) == False:
+        raise HTTPException(status_code=422, detail="Domain is not valid")
+    # Check if url is spam or not
+    is_spam = spam_url_in.domain in SPAMHAUS_DBL
+    # Response object
+    spam_url_out = SpamUrlOut(is_spam=not is_spam)
+    return spam_url_out
+
+
+@app.post("/sql_injection_scan", response_model=SqlInjectionOut)
+async def sql_injection_scan(sql_injection_in: SqlInjectionIn):
+    # Check validation
+    if checkers.is_url(sql_injection_in.url) == False:
+        raise HTTPException(status_code=422, detail="Url is not valid")
+    # Check if url is vulnerable or not
+    is_vulnerable = sql_injection.scan_sql_injection(sql_injection_in.url)
+    # Response object
+    sql_injection_out = SqlInjectionOut(is_vulnerable=is_vulnerable)
+    return sql_injection_out
