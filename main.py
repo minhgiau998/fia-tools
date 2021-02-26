@@ -2,12 +2,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from validator_collection import validators, checkers
-import socket
-import requests
-from googlesearch import search
-from urllib.parse import urlparse
-from spam_lists import SPAMHAUS_DBL
 import network
+import port
+import whois
+import google_dork
+import spam_url
 import sql_injection
 
 app = FastAPI()
@@ -194,20 +193,7 @@ async def port_scan(port_in: PortIn):
     if checkers.is_ip_address(port_in.ip_address) == False:
         raise HTTPException(status_code=422, detail="IP address is not valid")
     # Declare ports
-    ports = []
-    # will scan ports between 1 to 1025
-    for port in range(1, 1025):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        socket.setdefaulttimeout(1)
-
-        # returns an error indicator
-        result = s.connect_ex((port_in.ip_address, port))
-        if result == 0:
-            print("Port {} is open".format(port))
-            ports.append(port)
-        else:
-            print("Port {} is closed".format(port))
-        s.close()
+    ports = port.scan(port_in.ip_address)
     # Response object
     network_out = NetworkOut(ports=ports)
     return network_out.dict()
@@ -216,45 +202,26 @@ async def port_scan(port_in: PortIn):
 @app.post("/whois_scan", response_model=WhoIsOut)
 async def whois_scan(who_is_in: WhoIsIn):
     # Check url
-    if checkers.is_domain(domain) == False:
+    if checkers.is_domain(who_is_in.domain) == False:
         raise HTTPException(status_code=422, detail="Domain is not valid")
     # Declare domain
-    domain = who_is_in.domain
-    # Send and receive results
-    response = requests.get(
-        "https://inet.vn/api/whois/" + domain)
-    json_data = response.json()
-    # Display results
-    print("[+] Code: " + json_data['code'])
-    print("[+] Total Query: " + str(json_data['totalQuery']))
-    print("[+] Domain Name: " + json_data['domainName'])
-    print("[+] Registrar: " + json_data['registrar'])
-    print("[+] Registrant Name: " + json_data['registrantName'])
-    print("[+] Name server:")
-    for name_server in json_data['nameServer']:
-        print(" [-] " + name_server)
-    print("[+] Status:")
-    for status in json_data['status']:
-        print(" [-] " + status)
-    print("[+] Creation Date: " + json_data['creationDate'])
-    print("[+] Expiration Date: " + json_data['expirationDate'])
+    response = whois.scan(who_is_in.domain)
     # Response object
-    who_is_out = WhoIsOut(total_query=json_data['totalQuery'],
-                          domain_name=json_data['domainName'],
-                          registrar=json_data['registrar'],
-                          registrant_name=json_data['registrantName'],
-                          name_server=json_data['nameServer'],
-                          status=json_data['status'],
-                          creation_date=json_data['creationDate'],
-                          expiration_date=json_data['expirationDate'])
+    who_is_out = WhoIsOut(total_query=response['totalQuery'],
+                          domain_name=response['domainName'],
+                          registrar=response['registrar'],
+                          registrant_name=response['registrantName'],
+                          name_server=response['nameServer'],
+                          status=response['status'],
+                          creation_date=response['creationDate'],
+                          expiration_date=response['expirationDate'])
     return who_is_out.dict()
 
 
-@app.post("/google_dork", response_model=GoogleDorkOut)
-async def google_dork(google_dork_in: GoogleDorkIn):
+@app.post("/google_dork_scan", response_model=GoogleDorkOut)
+async def google_dork_scan(google_dork_in: GoogleDorkIn):
     # Search Google
-    dorks = search(term=google_dork_in.query,
-                   num_results=google_dork_in.number_of_results, lang=google_dork_in.lang)
+    dorks = google_dork.scan(google_dork_in)
     # Response object
     google_dork_out = GoogleDorkOut(dorks=dorks)
     return google_dork_out
@@ -266,9 +233,9 @@ async def spam_url_checker(spam_url_in: SpamUrlIn):
     if checkers.is_domain(spam_url_in.domain) == False:
         raise HTTPException(status_code=422, detail="Domain is not valid")
     # Check if url is spam or not
-    is_spam = spam_url_in.domain in SPAMHAUS_DBL
+    is_spam = spam_url.check(spam_url_in.domain)
     # Response object
-    spam_url_out = SpamUrlOut(is_spam=not is_spam)
+    spam_url_out = SpamUrlOut(is_spam=is_spam)
     return spam_url_out
 
 
