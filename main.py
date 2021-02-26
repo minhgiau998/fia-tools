@@ -8,6 +8,7 @@ import whois
 import google_dork
 import spam_url
 import sql_injection
+import path
 
 app = FastAPI()
 
@@ -178,6 +179,31 @@ class SqlInjectionOut(BaseModel):
         }
 
 
+class PathIn(BaseModel):
+    url: str
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "url": "https://fpt.edu.vn/"
+            }
+        }
+
+
+class PathOut(BaseModel):
+    urls: List[str]
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "urls": [
+                    "https://www.abc.com/login",
+                    "https://www.abc.com/admin"
+                ]
+            }
+        }
+
+
 @app.post("/network_scan", response_model=NetworkOut)
 async def network_scan(network_in: NetworkIn):
     # Onlines Ip address
@@ -249,3 +275,15 @@ async def sql_injection_scan(sql_injection_in: SqlInjectionIn):
     # Response object
     sql_injection_out = SqlInjectionOut(is_vulnerable=is_vulnerable)
     return sql_injection_out
+
+
+@app.post("/path_scan", response_model=PathOut)
+async def path_scan(path_in: PathIn):
+    # Check validation
+    if checkers.is_url(path_in.url) == False:
+        raise HTTPException(status_code=422, detail="Url is not valid")
+    # Check path
+    urls = path.scan(path_in.url)
+    # Response object
+    path_out = PathOut(urls=urls)
+    return path_out
