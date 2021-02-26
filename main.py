@@ -2,14 +2,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from validator_collection import validators, checkers
-import subprocess
-import ipaddress
 import socket
 import requests
-import json
 from googlesearch import search
 from urllib.parse import urlparse
 from spam_lists import SPAMHAUS_DBL
+import network
 import sql_injection
 
 app = FastAPI()
@@ -184,37 +182,7 @@ class SqlInjectionOut(BaseModel):
 @app.post("/network_scan", response_model=NetworkOut)
 async def network_scan(network_in: NetworkIn):
     # Onlines Ip address
-    onlines = []
-    # Create the network layer
-    try:
-        ip_net = ipaddress.ip_network(network_in.ip_address)
-    except ipaddress.AddressValueError(ValueError):
-        raise HTTPException(
-            status_code=422, detail="Network layer is not valid")
-    # Get all the ip addresses in the network layer
-    all_hosts = list(ip_net.hosts())
-    # Customize child processes and command prompt
-    info = subprocess.STARTUPINFO()
-    info.dwFlags != subprocess.STARTF_USESHOWWINDOW
-    info.wShowWindow = subprocess.SW_HIDE
-    # Each ip address will ping that address
-    for i in range(len(all_hosts)):
-        output = subprocess.Popen(['ping', '-n', '1',
-                                   '-w', '500', str(all_hosts[i])],
-                                  stdout=subprocess.PIPE,
-                                  startupinfo=info).communicate()[0]
-        # If the unresponsive IP address is offline and vice versa.
-        if "Destination host unreachable" in output.decode('utf-8'):
-            print("[+] ", str(all_hosts[i]), "is Offline")
-        elif "Request timed out" in output.decode('utf-8'):
-            print("[+] ", str(all_hosts[i]), "is Offline")
-        else:
-            print("[+] ", str(all_hosts[i]), "is Online")
-            onlines.append(str(all_hosts[i]))
-    # Display online hosts
-    print("-" * 5, " Host Live ", "-" * 5)
-    for online in onlines:
-        print("[+] ", online)
+    onlines = network.scan(network_in.ip_address)
     # Response object
     network_out = NetworkOut(onlines=onlines)
     return network_out.dict()
@@ -310,7 +278,7 @@ async def sql_injection_scan(sql_injection_in: SqlInjectionIn):
     if checkers.is_url(sql_injection_in.url) == False:
         raise HTTPException(status_code=422, detail="Url is not valid")
     # Check if url is vulnerable or not
-    is_vulnerable = sql_injection.scan_sql_injection(sql_injection_in.url)
+    is_vulnerable = sql_injection.scan(sql_injection_in.url)
     # Response object
     sql_injection_out = SqlInjectionOut(is_vulnerable=is_vulnerable)
     return sql_injection_out

@@ -67,7 +67,7 @@ def is_vulnerable(response):
     return False
 
 
-def scan_sql_injection(url):
+def scan(url):
     # add checker
     flag = False
     # test on URL
