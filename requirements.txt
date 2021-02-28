@@ -1,0 +1,4 @@
+googlesearch-python==2020.0.2
+spam_lists==1.0.0
+beautifulsoup4==4.9.1
+fake-useragent==0.1.11
